@@ -1,0 +1,371 @@
+﻿-- Microsoft SQL Server: new database only. Existing tables/data are never dropped.
+USE [master];
+GO
+IF DB_ID(N'ChudoObuv') IS NULL
+    CREATE DATABASE [ChudoObuv] COLLATE Cyrillic_General_100_CI_AS;
+GO
+USE [ChudoObuv];
+GO
+IF EXISTS(SELECT 1 FROM sys.tables WHERE is_ms_shipped=0)
+    THROW 51000, 'Database already contains tables. Use a new empty database.', 1;
+ELSE
+BEGIN
+    EXEC sys.sp_executesql N'SET XACT_ABORT ON;
+BEGIN TRANSACTION;
+CREATE TABLE dbo.roles (
+    role_id int IDENTITY(1,1) NOT NULL CONSTRAINT PK_roles PRIMARY KEY,
+    code varchar(20) NOT NULL CONSTRAINT UQ_roles_code UNIQUE,
+    name nvarchar(80) NOT NULL CONSTRAINT UQ_roles_name UNIQUE,
+    CONSTRAINT CK_roles_code CHECK(code IN (''admin'',''manager'',''customer''))
+);
+CREATE TABLE dbo.users (
+    user_id int IDENTITY(1,1) NOT NULL CONSTRAINT PK_users PRIMARY KEY,
+    last_name nvarchar(100) NOT NULL,
+    first_name nvarchar(100) NOT NULL,
+    middle_name nvarchar(100) NOT NULL,
+    login nvarchar(100) NOT NULL CONSTRAINT UQ_users_login UNIQUE,
+    role_id int NOT NULL,
+    CONSTRAINT FK_users_roles FOREIGN KEY(role_id) REFERENCES dbo.roles(role_id)
+);
+CREATE TABLE dbo.categories (
+    category_id int IDENTITY(1,1) NOT NULL CONSTRAINT PK_categories PRIMARY KEY,
+    name nvarchar(100) NOT NULL CONSTRAINT UQ_categories_name UNIQUE
+);
+CREATE TABLE dbo.subcategories (
+    subcategory_id int IDENTITY(1,1) NOT NULL CONSTRAINT PK_subcategories PRIMARY KEY,
+    name nvarchar(100) NOT NULL CONSTRAINT UQ_subcategories_name UNIQUE
+);
+CREATE TABLE dbo.manufacturers (
+    manufacturer_id int IDENTITY(1,1) NOT NULL CONSTRAINT PK_manufacturers PRIMARY KEY,
+    name nvarchar(200) NOT NULL CONSTRAINT UQ_manufacturers_name UNIQUE
+);
+CREATE TABLE dbo.products (
+    product_id int IDENTITY(1,1) NOT NULL CONSTRAINT PK_products PRIMARY KEY,
+    category_id int NOT NULL,
+    subcategory_id int NOT NULL,
+    manufacturer_id int NOT NULL,
+    name nvarchar(300) NOT NULL,
+    image_path nvarchar(250) NULL,
+    description nvarchar(max) NOT NULL,
+    composition nvarchar(2000) NOT NULL,
+    price_kopecks bigint NOT NULL,
+    CONSTRAINT UQ_products_model UNIQUE(name,manufacturer_id),
+    CONSTRAINT CK_products_price CHECK(price_kopecks BETWEEN 0 AND 100000000000),
+    CONSTRAINT FK_products_categories FOREIGN KEY(category_id) REFERENCES dbo.categories(category_id),
+    CONSTRAINT FK_products_subcategories FOREIGN KEY(subcategory_id) REFERENCES dbo.subcategories(subcategory_id),
+    CONSTRAINT FK_products_manufacturers FOREIGN KEY(manufacturer_id) REFERENCES dbo.manufacturers(manufacturer_id)
+);
+CREATE TABLE dbo.sizes (
+    size_id int IDENTITY(1,1) NOT NULL CONSTRAINT PK_sizes PRIMARY KEY,
+    value decimal(4,1) NOT NULL CONSTRAINT UQ_sizes_value UNIQUE,
+    CONSTRAINT CK_sizes_value CHECK(value>0)
+);
+CREATE TABLE dbo.stock_items (
+    stock_item_id int IDENTITY(1,1) NOT NULL CONSTRAINT PK_stock_items PRIMARY KEY,
+    product_id int NOT NULL,
+    size_id int NOT NULL,
+    available_quantity int NOT NULL,
+    CONSTRAINT UQ_stock_items_variant UNIQUE(product_id,size_id),
+    CONSTRAINT CK_stock_items_quantity CHECK(available_quantity BETWEEN 0 AND 1000000),
+    CONSTRAINT FK_stock_items_products FOREIGN KEY(product_id) REFERENCES dbo.products(product_id),
+    CONSTRAINT FK_stock_items_sizes FOREIGN KEY(size_id) REFERENCES dbo.sizes(size_id)
+);
+CREATE TABLE dbo.orders (
+    order_id int IDENTITY(1,1) NOT NULL CONSTRAINT PK_orders PRIMARY KEY,
+    order_date date NOT NULL,
+    customer_id int NOT NULL,
+    CONSTRAINT FK_orders_users FOREIGN KEY(customer_id) REFERENCES dbo.users(user_id)
+);
+CREATE TABLE dbo.order_items (
+    order_item_id int IDENTITY(1,1) NOT NULL CONSTRAINT PK_order_items PRIMARY KEY,
+    order_id int NOT NULL,
+    stock_item_id int NOT NULL,
+    quantity int NOT NULL,
+    unit_price_kopecks bigint NOT NULL,
+    CONSTRAINT UQ_order_items_variant UNIQUE(order_id,stock_item_id),
+    CONSTRAINT CK_order_items_quantity CHECK(quantity BETWEEN 1 AND 10000),
+    CONSTRAINT CK_order_items_price CHECK(unit_price_kopecks BETWEEN 0 AND 100000000000),
+    CONSTRAINT FK_order_items_orders FOREIGN KEY(order_id) REFERENCES dbo.orders(order_id) ON DELETE CASCADE,
+    CONSTRAINT FK_order_items_stock_items FOREIGN KEY(stock_item_id) REFERENCES dbo.stock_items(stock_item_id)
+);
+CREATE INDEX IX_orders_date ON dbo.orders(order_date,order_id);
+CREATE INDEX IX_orders_customer ON dbo.orders(customer_id);
+CREATE INDEX IX_order_items_stock ON dbo.order_items(stock_item_id,order_id);
+COMMIT TRANSACTION;';
+    EXEC sys.sp_executesql N'CREATE VIEW dbo.order_totals AS
+SELECT o.order_id,o.order_date,o.customer_id,
+    COALESCE(SUM(CAST(oi.quantity AS bigint)*oi.unit_price_kopecks),0) AS total_kopecks
+FROM dbo.orders o LEFT JOIN dbo.order_items oi ON oi.order_id=o.order_id
+GROUP BY o.order_id,o.order_date,o.customer_id;';
+    EXEC sys.sp_executesql N'SET XACT_ABORT ON;
+BEGIN TRANSACTION;
+SET IDENTITY_INSERT dbo.roles ON;
+INSERT dbo.roles([role_id],[code],[name]) VALUES(1,N''admin'',N''Администратор'');
+INSERT dbo.roles([role_id],[code],[name]) VALUES(2,N''manager'',N''Менеджер'');
+INSERT dbo.roles([role_id],[code],[name]) VALUES(3,N''customer'',N''Авторизованный пользователь'');
+SET IDENTITY_INSERT dbo.roles OFF;
+SET IDENTITY_INSERT dbo.users ON;
+INSERT dbo.users([user_id],[last_name],[first_name],[middle_name],[login],[role_id]) VALUES(1,N''Иванов'',N''Иван'',N''Сергеевич'',N''isivanov'',1);
+INSERT dbo.users([user_id],[last_name],[first_name],[middle_name],[login],[role_id]) VALUES(2,N''Петров'',N''Пётр'',N''Алексеевич'',N''papetrov'',2);
+INSERT dbo.users([user_id],[last_name],[first_name],[middle_name],[login],[role_id]) VALUES(3,N''Сидорова'',N''Анна'',N''Дмитриевна'',N''asidorova'',3);
+INSERT dbo.users([user_id],[last_name],[first_name],[middle_name],[login],[role_id]) VALUES(4,N''Кузнецова'',N''Екатерина'',N''Андреевна'',N''ekuznetsova'',2);
+INSERT dbo.users([user_id],[last_name],[first_name],[middle_name],[login],[role_id]) VALUES(5,N''Смирнов'',N''Дмитрий'',N''Владимирович'',N''dsmirnov'',3);
+INSERT dbo.users([user_id],[last_name],[first_name],[middle_name],[login],[role_id]) VALUES(6,N''Попов'',N''Алексей'',N''Николаевич'',N''apopov'',1);
+INSERT dbo.users([user_id],[last_name],[first_name],[middle_name],[login],[role_id]) VALUES(7,N''Васильева'',N''Ольга'',N''Игоревна'',N''ovasileva'',3);
+INSERT dbo.users([user_id],[last_name],[first_name],[middle_name],[login],[role_id]) VALUES(8,N''Соколов'',N''Павел'',N''Викторович'',N''psokolov'',2);
+INSERT dbo.users([user_id],[last_name],[first_name],[middle_name],[login],[role_id]) VALUES(9,N''Михайлова'',N''Татьяна'',N''Юрьевна'',N''tmikhailova'',3);
+INSERT dbo.users([user_id],[last_name],[first_name],[middle_name],[login],[role_id]) VALUES(10,N''Новикова'',N''Наталья'',N''Сергеевна'',N''nnovikova'',2);
+INSERT dbo.users([user_id],[last_name],[first_name],[middle_name],[login],[role_id]) VALUES(11,N''Фёдоров'',N''Андрей'',N''Максимович'',N''afedorov'',1);
+INSERT dbo.users([user_id],[last_name],[first_name],[middle_name],[login],[role_id]) VALUES(12,N''Морозов'',N''Сергей'',N''Павлович'',N''smorozov'',3);
+INSERT dbo.users([user_id],[last_name],[first_name],[middle_name],[login],[role_id]) VALUES(13,N''Волкова'',N''Юлия'',N''Александровна'',N''jvolkova'',2);
+INSERT dbo.users([user_id],[last_name],[first_name],[middle_name],[login],[role_id]) VALUES(14,N''Алексеев'',N''Артём'',N''Евгеньевич'',N''aalekseev'',3);
+INSERT dbo.users([user_id],[last_name],[first_name],[middle_name],[login],[role_id]) VALUES(15,N''Лебедева'',N''Ирина'',N''Владимировна'',N''ilebedeva'',3);
+INSERT dbo.users([user_id],[last_name],[first_name],[middle_name],[login],[role_id]) VALUES(16,N''Егоров'',N''Никита'',N''Денисович'',N''negorov'',2);
+INSERT dbo.users([user_id],[last_name],[first_name],[middle_name],[login],[role_id]) VALUES(17,N''Павлова'',N''Елена'',N''Петровна'',N''epavlova'',3);
+INSERT dbo.users([user_id],[last_name],[first_name],[middle_name],[login],[role_id]) VALUES(18,N''Козлов'',N''Роман'',N''Олегович'',N''rkozlov'',1);
+INSERT dbo.users([user_id],[last_name],[first_name],[middle_name],[login],[role_id]) VALUES(19,N''Степанова'',N''Виктория'',N''Романовна'',N''vstepanova'',2);
+INSERT dbo.users([user_id],[last_name],[first_name],[middle_name],[login],[role_id]) VALUES(20,N''Николаев'',N''Владимир'',N''Иванович'',N''vnikolaev'',3);
+SET IDENTITY_INSERT dbo.users OFF;
+SET IDENTITY_INSERT dbo.categories ON;
+INSERT dbo.categories([category_id],[name]) VALUES(1,N''Детская обувь'');
+INSERT dbo.categories([category_id],[name]) VALUES(2,N''Женская обувь'');
+INSERT dbo.categories([category_id],[name]) VALUES(3,N''Мужская обувь'');
+SET IDENTITY_INSERT dbo.categories OFF;
+SET IDENTITY_INSERT dbo.subcategories ON;
+INSERT dbo.subcategories([subcategory_id],[name]) VALUES(1,N''Босоножки'');
+INSERT dbo.subcategories([subcategory_id],[name]) VALUES(2,N''Ботинки'');
+INSERT dbo.subcategories([subcategory_id],[name]) VALUES(3,N''Кроссовки'');
+INSERT dbo.subcategories([subcategory_id],[name]) VALUES(4,N''Сапоги'');
+INSERT dbo.subcategories([subcategory_id],[name]) VALUES(5,N''Туфли'');
+SET IDENTITY_INSERT dbo.subcategories OFF;
+SET IDENTITY_INSERT dbo.manufacturers ON;
+INSERT dbo.manufacturers([manufacturer_id],[name]) VALUES(1,N''Азимут'');
+INSERT dbo.manufacturers([manufacturer_id],[name]) VALUES(2,N''Барбари'');
+INSERT dbo.manufacturers([manufacturer_id],[name]) VALUES(3,N''Берестов'');
+INSERT dbo.manufacturers([manufacturer_id],[name]) VALUES(4,N''Весна'');
+INSERT dbo.manufacturers([manufacturer_id],[name]) VALUES(5,N''Здоровый шаг'');
+INSERT dbo.manufacturers([manufacturer_id],[name]) VALUES(6,N''Карапуз'');
+INSERT dbo.manufacturers([manufacturer_id],[name]) VALUES(7,N''Кожевенные традиции'');
+INSERT dbo.manufacturers([manufacturer_id],[name]) VALUES(8,N''Лапушка'');
+INSERT dbo.manufacturers([manufacturer_id],[name]) VALUES(9,N''Маленький франт'');
+INSERT dbo.manufacturers([manufacturer_id],[name]) VALUES(10,N''Малыш-Спорт'');
+INSERT dbo.manufacturers([manufacturer_id],[name]) VALUES(11,N''Модный силуэт'');
+INSERT dbo.manufacturers([manufacturer_id],[name]) VALUES(12,N''Северята'');
+INSERT dbo.manufacturers([manufacturer_id],[name]) VALUES(13,N''Стиль и комфорт'');
+INSERT dbo.manufacturers([manufacturer_id],[name]) VALUES(14,N''Твой комфорт'');
+INSERT dbo.manufacturers([manufacturer_id],[name]) VALUES(15,N''Топ-Топ'');
+INSERT dbo.manufacturers([manufacturer_id],[name]) VALUES(16,N''Тёплые ножки'');
+SET IDENTITY_INSERT dbo.manufacturers OFF;
+SET IDENTITY_INSERT dbo.products ON;
+INSERT dbo.products([product_id],[category_id],[subcategory_id],[manufacturer_id],[name],[image_path],[description],[composition],[price_kopecks]) VALUES(1,1,3,10,N''Кроссовки детские «Звёздочка» экокожа'',N''Images/IMG_KS_195217.png'',N''Кроссовки детские «Звёздочка» экокожа. Производитель: ООО «Малыш-Спорт», г. Смоленск'',N''Верх — экокожа (полиуретан на хлопковой основе), подкладка — хлопок 100%, подошва — ПВХ'',219000);
+INSERT dbo.products([product_id],[category_id],[subcategory_id],[manufacturer_id],[name],[image_path],[description],[composition],[price_kopecks]) VALUES(2,1,3,15,N''Кроссовки детские «Гонщик» экокожа'',N''Images/IMG_KS_195213.png'',N''Кроссовки детские «Гонщик» экокожа. Производитель: Фабрика «Топ-Топ», г. Киров'',N''Верх — экокожа (микрофибра), подкладка — текстиль сетчатый (полиэстер), подошва — термопластичная резина (ТЭП)'',249000);
+INSERT dbo.products([product_id],[category_id],[subcategory_id],[manufacturer_id],[name],[image_path],[description],[composition],[price_kopecks]) VALUES(3,1,3,8,N''Кроссовки детские «Радуга» экокожа перфорированная'',N''Images/IMG_KS_195222.png'',N''Кроссовки детские «Радуга» экокожа перфорированная. Производитель: ИП Смирнова Л.В. (бренд «Лапушка»), г. Вологда'',N''Верх — экокожа перфорированная, вставки — нейлон, стелька — ортопедическая с латексной подушкой, подошва — ЭВА'',199000);
+INSERT dbo.products([product_id],[category_id],[subcategory_id],[manufacturer_id],[name],[image_path],[description],[composition],[price_kopecks]) VALUES(4,1,4,16,N''Сапожки детские «Снежинка» зимние на меху'',N''Images/IMG_KB_185501.png'',N''Сапожки детские «Снежинка» зимние на меху. Производитель: ООО «Тёплые ножки», г. Новосибирск'',N''Верх — экокожа морозостойкая, утеплитель — искусственный мех (акрил 70%, полиэстер 30%), подкладка — флис, подошва — термоэластопласт (ТЭП)'',349000);
+INSERT dbo.products([product_id],[category_id],[subcategory_id],[manufacturer_id],[name],[image_path],[description],[composition],[price_kopecks]) VALUES(5,1,4,12,N''Сапожки детские «Медвежонок» демисезонные непромокаемые'',N''Images/IMG_KB_164816.png'',N''Сапожки детские «Медвежонок» демисезонные непромокаемые. Производитель: Компания «Северята», г. Архангельск'',N''Верх — плащёвая ткань с водоотталкивающей пропиткой (полиэстер 100%), отделка — экокожа, подкладка — микрофибра, мембрана — AirTex, подошва — резина'',319000);
+INSERT dbo.products([product_id],[category_id],[subcategory_id],[manufacturer_id],[name],[image_path],[description],[composition],[price_kopecks]) VALUES(6,1,4,4,N''Сапожки детские «Принцесса» кожаные'',N''Images/IMG_KB_164811.png'',N''Сапожки детские «Принцесса» кожаные. Производитель: Мастерская «Весна», г. Тула'',N''Верх — натуральная кожа (КРС), подкладка — шерсть натуральная (70%), байка (30%), стелька — войлочная, подошва — полиуретан'',429000);
+INSERT dbo.products([product_id],[category_id],[subcategory_id],[manufacturer_id],[name],[image_path],[description],[composition],[price_kopecks]) VALUES(7,1,1,5,N''Сандалии детские «Пчёлка» ортопедические летние'',N''Images/IMG_KSd_195207.png'',N''Сандалии детские «Пчёлка» ортопедические летние. Производитель: ООО «Здоровый шаг», г. Воронеж'',N''Верх — нубук натуральный, подкладка — кожа растительного дубления, стелька — анатомическая с супинатором (латекс + пробка), подошва — каучук'',279000);
+INSERT dbo.products([product_id],[category_id],[subcategory_id],[manufacturer_id],[name],[image_path],[description],[composition],[price_kopecks]) VALUES(8,1,1,6,N''Сандалии детские «Морячок» текстильные с фиксатором'',N''Images/IMG_KSd_185508.png'',N''Сандалии детские «Морячок» текстильные с фиксатором. Производитель: ИП Кузнецов А.Д. (бренд «Карапуз»), г. Краснодар'',N''Верх — джинсовая ткань (хлопок 100%), окантовка — искусственная кожа, подкладка — хлопок, подошва — ЭВА лёгкая'',169000);
+INSERT dbo.products([product_id],[category_id],[subcategory_id],[manufacturer_id],[name],[image_path],[description],[composition],[price_kopecks]) VALUES(9,1,5,9,N''Туфли детские «Бантик» лаковые праздничные'',N''Images/IMG_KSho_185512.png'',N''Туфли детские «Бантик» лаковые праздничные. Производитель: Дом обуви «Маленький франт», г. Москва'',N''Верх — искусственная лаковая кожа (ПВХ), носок усиленный — термопластичный полиуретан, подкладка — кожа искусственная дышащая, стелька — анатомическая с амортизацией, подошва — полиуретан'',239000);
+INSERT dbo.products([product_id],[category_id],[subcategory_id],[manufacturer_id],[name],[image_path],[description],[composition],[price_kopecks]) VALUES(10,2,4,2,N''Сапоги зимние натуральная кожа'',N''Images/IMG_WB_170905.png'',N''Сапоги женские зимние, нескользящая, устойчивая подошва, натуральный мех. Производитель: Дом обуви «Барбари», г. Новороссийск'',N''Верх — натуральная кожа, подкладка — евромех, натуральный мех, текстильный утеплитель, подошва — резина'',2500000);
+INSERT dbo.products([product_id],[category_id],[subcategory_id],[manufacturer_id],[name],[image_path],[description],[composition],[price_kopecks]) VALUES(11,2,4,2,N''Сапоги осенние натуральная кожа'',N''Images/IMG_WB_170859.png'',N''Сапоги женские демисезонные из высококачественной натуральной кожи. Производитель: Дом обуви «Барбари», г. Новороссийск'',N''Верх — натуральная кожа, подкладка — текстильный утеплитель, стелька — текстиль, подошва — ТПР'',1500000);
+INSERT dbo.products([product_id],[category_id],[subcategory_id],[manufacturer_id],[name],[image_path],[description],[composition],[price_kopecks]) VALUES(12,2,4,14,N''Сапоги трубы демисезонные замшевые'',N''Images/IMG_WB_170906.png'',N''Сапоги женские демисезонные замшевые. Производитель: ОАО «Твой комфорт», г. Ярославль'',N''Верх — натуральная замша, утепленные, тракторная подошва, стелька — байка, подошва — резина'',1700000);
+INSERT dbo.products([product_id],[category_id],[subcategory_id],[manufacturer_id],[name],[image_path],[description],[composition],[price_kopecks]) VALUES(13,2,1,13,N''Босоножки «Песчаный берег» коричневые'',N''Images/IMG_WSd_174332.png'',N''Коричневая кожаная модель с открытым носком, боковой пряжкой и закрытым каблуком. Производитель: ИП «Стиль и комфорт», г. Санкт-Петербург'',N''Верх — 100% козья кожа, подкладка — 100% кожа; подошва: 100% кожа'',750000);
+INSERT dbo.products([product_id],[category_id],[subcategory_id],[manufacturer_id],[name],[image_path],[description],[composition],[price_kopecks]) VALUES(14,2,1,7,N''Женские босоножки «Черный кофе» со скульптурным каблуком'',N''Images/IMG_WSd_185156.png'',N''Открытый носок и ремешок со сборной пряжкой, низкий каблук и резиновая подошва гарантируют комфорт. Производитель: ЗАО «Кожевенные традиции», г. Вятка'',N''Верх — кожа собственного производств, подкладка — кожа; подошва: резина'',560000);
+INSERT dbo.products([product_id],[category_id],[subcategory_id],[manufacturer_id],[name],[image_path],[description],[composition],[price_kopecks]) VALUES(15,2,1,11,N''Босоножки женские «Летний бриз»'',N''Images/IMG_WSd_185551.png'',N''Босоножки женские кожаные белые, регулируемый ремешок, закрытый каблук и кожаная подошва. Производитель: ООО «Модный силуэт», г. Кострома'',N''Верх — натуральная кожа, подкладка — натуральная кожа, подошва — кожа'',713000);
+INSERT dbo.products([product_id],[category_id],[subcategory_id],[manufacturer_id],[name],[image_path],[description],[composition],[price_kopecks]) VALUES(16,2,5,11,N''Демисезонные туфли натуральная кожа'',N''Images/IMG_WSho_174409.png'',N''Комфортные лаконичные лодочки, классический дизайна с современными акцентами. Производитель: ООО «Модный силуэт», г. Кострома'',N''Верх — натуральная овечья кожа, подкладка и стелька — натуральная овечья кожа, подошва — резина'',1234000);
+INSERT dbo.products([product_id],[category_id],[subcategory_id],[manufacturer_id],[name],[image_path],[description],[composition],[price_kopecks]) VALUES(17,2,5,7,N''Туфли женские натуральная кожа с металлическими вставками'',N''Images/IMG_WSho_185202.png'',N''Стильные туфли для весеннего и летнего сезона. Производитель: ЗАО «Кожевенные традиции», г. Вятка'',N''Верх — натуральная телячьей кожа, металлическая пряжка, подкладка и стелька— натуральная овечья кожа, подошва — резина'',775700);
+INSERT dbo.products([product_id],[category_id],[subcategory_id],[manufacturer_id],[name],[image_path],[description],[composition],[price_kopecks]) VALUES(18,2,5,13,N''Туфли классические лодочки натуральная кожа'',N''Images/IMG_WSho_185545.png'',N''Модель из натуральной кожи, классический острый носок и изящная шпилька. Производитель: ИП «Стиль и комфорт», г. Санкт-Петербург'',N''Верх — натуральная кожа, подкладка и стелька — натуральная кожа, подошва — тунит'',755000);
+INSERT dbo.products([product_id],[category_id],[subcategory_id],[manufacturer_id],[name],[image_path],[description],[composition],[price_kopecks]) VALUES(19,2,3,15,N''Кроссовки белые с оранжевым и красным'',N''Images/IMG_WS_174110.png'',N''Многослойный верх из кожи и текстиля. Производитель: Фабрика «Топ-Топ», г. Киров'',N''Верх — 70% кожа, 30% текстиль, подкладка — текстиль, подошва — резина'',945000);
+INSERT dbo.products([product_id],[category_id],[subcategory_id],[manufacturer_id],[name],[image_path],[description],[composition],[price_kopecks]) VALUES(20,2,3,15,N''Кроссовки летние кожаные'',N''Images/IMG_WS_185528.png'',N''Уверенность на каждом шагу. Материал обеспечивает долговечность и комфорт при носке. Производитель: Фабрика «Топ-Топ», г. Киров'',N''Верх — 87% кожа, 11% текстиль, 2% синтетика; подкладка: 100% текстиль; подошва: резина, пластик'',856500);
+INSERT dbo.products([product_id],[category_id],[subcategory_id],[manufacturer_id],[name],[image_path],[description],[composition],[price_kopecks]) VALUES(21,2,3,13,N''Кроссовки кожаные'',N''Images/IMG_WS_185535.png'',N''Кроссовки женские из натуральной кожи. Производитель: ИП «Стиль и комфорт», г. Санкт-Петербург'',N''Верх — натуральная кожа, подкладка — кожа, подошва — полиуретан'',876500);
+INSERT dbo.products([product_id],[category_id],[subcategory_id],[manufacturer_id],[name],[image_path],[description],[composition],[price_kopecks]) VALUES(22,2,3,13,N''Кроссовки «Стиль и комфорт»'',N''Images/IMG_WS_185538.png'',N''Кроссовки женские из натуральной кожи и синтетических материалов, сетчатые вставки. Производитель: ИП «Стиль и комфорт», г. Санкт-Петербург'',N''Верх — 70% кожа, 20% полиамид, 10% полиуретан; подкладка — текстиль, подошва — ТПУ'',779500);
+INSERT dbo.products([product_id],[category_id],[subcategory_id],[manufacturer_id],[name],[image_path],[description],[composition],[price_kopecks]) VALUES(23,3,3,1,N''Кроссовки для бега «Драйв»'',N''Images/IMG_MS_185531.png'',N''Сочетание стиля, комфорта и современных технологий. Производитель: Фабрика «Азимут», г. Санкт-Петербург'',N''Верх — сетка, подкладка — текстиль, подошва — резина'',655000);
+INSERT dbo.products([product_id],[category_id],[subcategory_id],[manufacturer_id],[name],[image_path],[description],[composition],[price_kopecks]) VALUES(24,3,3,1,N''Кроссовки «Азимут Бег»'',N''Images/IMG_MS_185532.png'',N''Универсальный выбор для повседневного использования. Производитель: Фабрика «Азимут», г. Санкт-Петербург'',N''Верх — 6% кожа, 29% текстиль, 15% полимерные материалы; подкладка — 100% текстиль; подошва — полимерные материалы, резина'',789000);
+INSERT dbo.products([product_id],[category_id],[subcategory_id],[manufacturer_id],[name],[image_path],[description],[composition],[price_kopecks]) VALUES(25,3,3,15,N''Кроссовки'',N''Images/IMG_MS_185533.png'',N''Кроссовки для мужчин, идеальное сочетание стиля и комфорта. Производитель: Фабрика «Топ-Топ», г. Киров'',N''Верх — 56% кожа, 29% текстиль, 15% полимерные материалы; подкладка — 100% текстиль; подошва — полимерные материалы, резина'',956700);
+INSERT dbo.products([product_id],[category_id],[subcategory_id],[manufacturer_id],[name],[image_path],[description],[composition],[price_kopecks]) VALUES(26,3,5,2,N''Черные туфли в классическом стиле — база для деловых образов'',N''Images/IMG_MSho_190514.png'',N''Модель выполнена из натуральной кожи, на резиновой подошве. Производитель: Дом обуви «Барбари», г. Новороссийск'',N''Верх — натуральная кожа, подкладка — текстиль, стелька — натуральная кожа, подошва — резина'',2456900);
+INSERT dbo.products([product_id],[category_id],[subcategory_id],[manufacturer_id],[name],[image_path],[description],[composition],[price_kopecks]) VALUES(27,3,5,3,N''Туфли мужские светлые классика демисезонные'',N''Images/IMG_MSho_190518.png'',N''Туфли на низком каблуке кожаные'',N''Верх — натуральная кожа, подкладка — текстиль, стелька — натуральная кожа, подошва — ТЭП'',1015500);
+INSERT dbo.products([product_id],[category_id],[subcategory_id],[manufacturer_id],[name],[image_path],[description],[composition],[price_kopecks]) VALUES(28,3,5,3,N''Туфли из натуральной кожи'',N''Images/IMG_MSho_191612.png'',N''Модель выполнена из натуральной кожи, на резиновой подошве, поддеживает классический и деловой стиль образов. Производитель: Дом обуви «Берестов», г. Москва'',N''Верх — натуральная кожа, подкладка — натуральная кожа, стелька — натуральная кожа, подошва — резина'',2562500);
+INSERT dbo.products([product_id],[category_id],[subcategory_id],[manufacturer_id],[name],[image_path],[description],[composition],[price_kopecks]) VALUES(29,3,2,2,N''Ботинки мужские демисезонные'',N''Images/IMG_MB_174349.png'',N''Ботинки из натуральной кожи темно-коричневого и черного цвета на шнурках. Производитель: Дом обуви «Берестов», г. Москва'',N''Верх — натуральная кожа, подкладка — текстиль, подошва — искусственный материал'',2150000);
+INSERT dbo.products([product_id],[category_id],[subcategory_id],[manufacturer_id],[name],[image_path],[description],[composition],[price_kopecks]) VALUES(30,3,2,7,N''Ботинки черные из натуральной кожи'',N''Images/IMG_MB_191200.png'',N''Ботинки представляют баланс традиций и современности. Выполнены из натуральной кожи насыщенного черного цвета. Производитель: ЗАО «Кожевенные традиции», г. Вятка'',N''Верх — натуральная кожа, подкладка — ворсин, стелька — ворсин, подошва — тунит'',1456700);
+INSERT dbo.products([product_id],[category_id],[subcategory_id],[manufacturer_id],[name],[image_path],[description],[composition],[price_kopecks]) VALUES(31,3,2,2,N''Ботинки зимние классические'',N''Images/IMG_MB_191205.png'',N''Выбор на каждый день — натуральная кожа, натуральный мех. Производитель: Дом обуви «Барбари», г. Новороссийск'',N''Верх — натуральная кожа, подкладка — натуральный мех, стелька — натуральный мех, подошва — ТЭП'',1567000);
+SET IDENTITY_INSERT dbo.products OFF;
+SET IDENTITY_INSERT dbo.sizes ON;
+INSERT dbo.sizes([size_id],[value]) VALUES(1,18.0);
+INSERT dbo.sizes([size_id],[value]) VALUES(2,19.0);
+INSERT dbo.sizes([size_id],[value]) VALUES(3,20.0);
+INSERT dbo.sizes([size_id],[value]) VALUES(4,21.0);
+INSERT dbo.sizes([size_id],[value]) VALUES(5,22.0);
+INSERT dbo.sizes([size_id],[value]) VALUES(6,23.0);
+INSERT dbo.sizes([size_id],[value]) VALUES(7,24.0);
+INSERT dbo.sizes([size_id],[value]) VALUES(8,25.0);
+INSERT dbo.sizes([size_id],[value]) VALUES(9,26.0);
+INSERT dbo.sizes([size_id],[value]) VALUES(10,27.0);
+INSERT dbo.sizes([size_id],[value]) VALUES(11,28.0);
+INSERT dbo.sizes([size_id],[value]) VALUES(12,29.0);
+INSERT dbo.sizes([size_id],[value]) VALUES(13,30.0);
+INSERT dbo.sizes([size_id],[value]) VALUES(14,31.0);
+INSERT dbo.sizes([size_id],[value]) VALUES(15,32.0);
+INSERT dbo.sizes([size_id],[value]) VALUES(16,33.0);
+INSERT dbo.sizes([size_id],[value]) VALUES(17,34.0);
+INSERT dbo.sizes([size_id],[value]) VALUES(18,35.0);
+INSERT dbo.sizes([size_id],[value]) VALUES(19,36.0);
+INSERT dbo.sizes([size_id],[value]) VALUES(20,36.5);
+INSERT dbo.sizes([size_id],[value]) VALUES(21,37.0);
+INSERT dbo.sizes([size_id],[value]) VALUES(22,37.5);
+INSERT dbo.sizes([size_id],[value]) VALUES(23,38.0);
+INSERT dbo.sizes([size_id],[value]) VALUES(24,38.5);
+INSERT dbo.sizes([size_id],[value]) VALUES(25,39.0);
+INSERT dbo.sizes([size_id],[value]) VALUES(26,39.5);
+INSERT dbo.sizes([size_id],[value]) VALUES(27,40.0);
+INSERT dbo.sizes([size_id],[value]) VALUES(28,40.5);
+INSERT dbo.sizes([size_id],[value]) VALUES(29,41.0);
+INSERT dbo.sizes([size_id],[value]) VALUES(30,41.5);
+INSERT dbo.sizes([size_id],[value]) VALUES(31,42.0);
+INSERT dbo.sizes([size_id],[value]) VALUES(32,42.5);
+INSERT dbo.sizes([size_id],[value]) VALUES(33,43.0);
+INSERT dbo.sizes([size_id],[value]) VALUES(34,44.0);
+INSERT dbo.sizes([size_id],[value]) VALUES(35,45.0);
+SET IDENTITY_INSERT dbo.sizes OFF;
+SET IDENTITY_INSERT dbo.stock_items ON;
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(1,1,3,20);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(2,1,4,20);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(3,1,5,20);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(4,1,6,20);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(5,1,7,20);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(6,1,8,20);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(7,2,16,2);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(8,2,17,2);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(9,3,2,30);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(10,3,3,30);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(11,4,2,15);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(12,4,3,15);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(13,5,4,5);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(14,5,5,5);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(15,5,6,5);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(16,6,1,4);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(17,6,2,4);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(18,6,3,4);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(19,7,4,4);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(20,7,5,4);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(21,7,6,4);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(22,7,7,4);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(23,8,10,7);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(24,8,11,7);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(25,8,12,7);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(26,8,13,7);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(27,9,1,7);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(28,9,2,7);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(29,9,3,7);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(30,10,19,12);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(31,10,21,12);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(32,11,25,2);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(33,11,27,2);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(34,12,21,5);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(35,12,25,5);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(36,12,27,5);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(37,13,19,10);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(38,13,21,10);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(39,13,23,10);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(40,13,25,10);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(41,13,27,10);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(42,14,18,3);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(43,15,21,23);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(44,15,25,23);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(45,15,27,23);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(46,16,19,25);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(47,16,21,25);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(48,16,23,25);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(49,17,19,4);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(50,17,23,4);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(51,17,25,4);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(52,17,27,4);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(53,18,18,9);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(54,18,23,9);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(55,19,18,2);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(56,19,19,2);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(57,20,21,5);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(58,20,22,5);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(59,20,23,5);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(60,20,24,5);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(61,21,18,16);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(62,21,19,16);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(63,21,23,16);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(64,21,25,16);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(65,22,18,3);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(66,22,23,3);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(67,23,30,18);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(68,23,31,18);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(69,23,32,18);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(70,23,33,18);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(71,24,23,50);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(72,24,24,50);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(73,24,25,50);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(74,24,26,50);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(75,24,27,50);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(76,24,29,50);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(77,25,29,3);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(78,25,31,3);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(79,25,34,3);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(80,26,27,23);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(81,26,29,23);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(82,26,33,23);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(83,27,31,15);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(84,27,33,15);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(85,27,34,15);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(86,28,34,3);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(87,29,29,1);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(88,29,31,1);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(89,30,31,20);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(90,30,33,20);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(91,31,29,30);
+INSERT dbo.stock_items([stock_item_id],[product_id],[size_id],[available_quantity]) VALUES(92,31,31,30);
+SET IDENTITY_INSERT dbo.stock_items OFF;
+SET IDENTITY_INSERT dbo.orders ON;
+INSERT dbo.orders([order_id],[order_date],[customer_id]) VALUES(1,N''2026-04-02'',3);
+INSERT dbo.orders([order_id],[order_date],[customer_id]) VALUES(2,N''2026-04-05'',17);
+INSERT dbo.orders([order_id],[order_date],[customer_id]) VALUES(3,N''2026-04-08'',7);
+INSERT dbo.orders([order_id],[order_date],[customer_id]) VALUES(4,N''2026-04-12'',15);
+INSERT dbo.orders([order_id],[order_date],[customer_id]) VALUES(5,N''2026-04-18'',12);
+INSERT dbo.orders([order_id],[order_date],[customer_id]) VALUES(6,N''2026-04-22'',9);
+INSERT dbo.orders([order_id],[order_date],[customer_id]) VALUES(7,N''2026-04-25'',14);
+INSERT dbo.orders([order_id],[order_date],[customer_id]) VALUES(8,N''2026-04-28'',20);
+INSERT dbo.orders([order_id],[order_date],[customer_id]) VALUES(9,N''2026-05-05'',5);
+INSERT dbo.orders([order_id],[order_date],[customer_id]) VALUES(10,N''2026-05-08'',17);
+SET IDENTITY_INSERT dbo.orders OFF;
+SET IDENTITY_INSERT dbo.order_items ON;
+INSERT dbo.order_items([order_item_id],[order_id],[stock_item_id],[quantity],[unit_price_kopecks]) VALUES(1,1,1,1,219000);
+INSERT dbo.order_items([order_item_id],[order_id],[stock_item_id],[quantity],[unit_price_kopecks]) VALUES(2,1,20,1,279000);
+INSERT dbo.order_items([order_item_id],[order_id],[stock_item_id],[quantity],[unit_price_kopecks]) VALUES(3,2,30,1,2500000);
+INSERT dbo.order_items([order_item_id],[order_id],[stock_item_id],[quantity],[unit_price_kopecks]) VALUES(4,2,39,1,750000);
+INSERT dbo.order_items([order_item_id],[order_id],[stock_item_id],[quantity],[unit_price_kopecks]) VALUES(5,3,34,1,1700000);
+INSERT dbo.order_items([order_item_id],[order_id],[stock_item_id],[quantity],[unit_price_kopecks]) VALUES(6,3,57,1,856500);
+INSERT dbo.order_items([order_item_id],[order_id],[stock_item_id],[quantity],[unit_price_kopecks]) VALUES(7,3,65,1,779500);
+INSERT dbo.order_items([order_item_id],[order_id],[stock_item_id],[quantity],[unit_price_kopecks]) VALUES(8,4,50,1,775700);
+INSERT dbo.order_items([order_item_id],[order_id],[stock_item_id],[quantity],[unit_price_kopecks]) VALUES(9,4,48,1,1234000);
+INSERT dbo.order_items([order_item_id],[order_id],[stock_item_id],[quantity],[unit_price_kopecks]) VALUES(10,4,44,1,713000);
+INSERT dbo.order_items([order_item_id],[order_id],[stock_item_id],[quantity],[unit_price_kopecks]) VALUES(11,4,62,1,876500);
+INSERT dbo.order_items([order_item_id],[order_id],[stock_item_id],[quantity],[unit_price_kopecks]) VALUES(12,4,32,1,1500000);
+INSERT dbo.order_items([order_item_id],[order_id],[stock_item_id],[quantity],[unit_price_kopecks]) VALUES(13,5,77,1,956700);
+INSERT dbo.order_items([order_item_id],[order_id],[stock_item_id],[quantity],[unit_price_kopecks]) VALUES(14,5,87,1,2150000);
+INSERT dbo.order_items([order_item_id],[order_id],[stock_item_id],[quantity],[unit_price_kopecks]) VALUES(15,5,73,1,789000);
+INSERT dbo.order_items([order_item_id],[order_id],[stock_item_id],[quantity],[unit_price_kopecks]) VALUES(16,6,80,1,2456900);
+INSERT dbo.order_items([order_item_id],[order_id],[stock_item_id],[quantity],[unit_price_kopecks]) VALUES(17,6,89,1,1456700);
+INSERT dbo.order_items([order_item_id],[order_id],[stock_item_id],[quantity],[unit_price_kopecks]) VALUES(18,6,91,1,1567000);
+INSERT dbo.order_items([order_item_id],[order_id],[stock_item_id],[quantity],[unit_price_kopecks]) VALUES(19,7,16,1,429000);
+INSERT dbo.order_items([order_item_id],[order_id],[stock_item_id],[quantity],[unit_price_kopecks]) VALUES(20,7,2,2,219000);
+INSERT dbo.order_items([order_item_id],[order_id],[stock_item_id],[quantity],[unit_price_kopecks]) VALUES(21,7,24,1,169000);
+INSERT dbo.order_items([order_item_id],[order_id],[stock_item_id],[quantity],[unit_price_kopecks]) VALUES(22,8,86,1,2562500);
+INSERT dbo.order_items([order_item_id],[order_id],[stock_item_id],[quantity],[unit_price_kopecks]) VALUES(23,8,75,3,789000);
+INSERT dbo.order_items([order_item_id],[order_id],[stock_item_id],[quantity],[unit_price_kopecks]) VALUES(24,8,70,2,655000);
+INSERT dbo.order_items([order_item_id],[order_id],[stock_item_id],[quantity],[unit_price_kopecks]) VALUES(25,9,7,1,249000);
+INSERT dbo.order_items([order_item_id],[order_id],[stock_item_id],[quantity],[unit_price_kopecks]) VALUES(26,9,14,2,319000);
+INSERT dbo.order_items([order_item_id],[order_id],[stock_item_id],[quantity],[unit_price_kopecks]) VALUES(27,10,53,1,755000);
+INSERT dbo.order_items([order_item_id],[order_id],[stock_item_id],[quantity],[unit_price_kopecks]) VALUES(28,10,43,1,713000);
+INSERT dbo.order_items([order_item_id],[order_id],[stock_item_id],[quantity],[unit_price_kopecks]) VALUES(29,10,46,1,1234000);
+INSERT dbo.order_items([order_item_id],[order_id],[stock_item_id],[quantity],[unit_price_kopecks]) VALUES(30,10,61,2,876500);
+SET IDENTITY_INSERT dbo.order_items OFF;
+EXEC sys.sp_addextendedproperty @name=N''ChudoObuv.SchemaVersion'',@value=N''1'';
+COMMIT TRANSACTION;
+';
+END;
+GO
