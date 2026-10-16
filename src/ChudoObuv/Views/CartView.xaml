@@ -1,0 +1,39 @@
+<UserControl xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid Margin="24">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <TextBlock Text="Корзина и оформление заказа" Style="{StaticResource Heading}"/>
+        <StackPanel Grid.Row="1" Margin="0,0,0,18">
+            <TextBlock Text="Клиент" Style="{StaticResource Label}"/>
+            <ComboBox x:Name="CustomerBox" DisplayMemberPath="FullName" SelectedValuePath="Id"/>
+        </StackPanel>
+        <DataGrid Grid.Row="2" x:Name="CartGrid">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Модель" Binding="{Binding Name}" Width="*" MinWidth="240"/>
+                <DataGridTextColumn Header="Производство" Binding="{Binding Manufacturer}" Width="145"/>
+                <DataGridTextColumn Header="Размер" Binding="{Binding Size, StringFormat=0.#}" Width="75"/>
+                <DataGridTextColumn Header="Пар" Binding="{Binding Quantity}" Width="60"/>
+                <DataGridTextColumn Header="Цена, ₽" Binding="{Binding UnitPrice, StringFormat=N2}" Width="110"/>
+                <DataGridTextColumn Header="Сумма, ₽" Binding="{Binding Total, StringFormat=N2}" Width="120"/>
+            </DataGrid.Columns>
+        </DataGrid>
+        <StackPanel Grid.Row="3" Margin="0,14,0,16">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Пар в выбранной строке:" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                <TextBox x:Name="QuantityBox" Text="1" Width="80" Margin="0,0,12,0"/>
+                <Button x:Name="ChangeQuantity" Content="Изменить количество"/>
+                <Button x:Name="RemoveLine" Content="Удалить позицию"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+                <TextBlock Text="Итого: " FontSize="24"/>
+                <TextBlock x:Name="TotalText" FontSize="24" FontWeight="Bold"/>
+            </StackPanel>
+        </StackPanel>
+        <DockPanel Grid.Row="4">
+            <Button x:Name="CancelOrder" Content="Отменить заказ" DockPanel.Dock="Left"/>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button x:Name="Back" Content="Продолжить выбор"/>
+                <Button x:Name="ConfirmOrder" Content="Подтвердить заказ" Style="{StaticResource Primary}" Margin="0"/>
+            </StackPanel>
+        </DockPanel>
+    </Grid>
+</UserControl>

@@ -1,1 +1,13 @@
-
+<UserControl xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid Margin="36">
+        <StackPanel VerticalAlignment="Center">
+            <TextBlock Text="Вход по логину" Style="{StaticResource Heading}"/>
+            <TextBlock Text="Логин" Style="{StaticResource Label}"/>
+            <TextBox x:Name="LoginBox" MaxLength="100" Margin="0,0,0,22"/>
+            <StackPanel Orientation="Horizontal">
+                <Button x:Name="SignIn" Content="Войти" Style="{StaticResource Primary}" MinWidth="125"/>
+                <Button x:Name="Back" Content="Назад к каталогу"/>
+            </StackPanel>
+        </StackPanel>
+    </Grid>
+</UserControl>
