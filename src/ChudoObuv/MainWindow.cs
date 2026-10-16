@@ -18,7 +18,13 @@ namespace ChudoObuv
         private List<Product> products = new List<Product>();
         private ICollectionView productView;
         private bool ready;
-        public FrameworkElement View { get { return view; } }
+        public FrameworkElement View
+        {
+            get
+            {
+                return view;
+            }
+        }
 
         public MainWindow(Store store)
         {
@@ -33,23 +39,47 @@ namespace ChudoObuv
             view = (FrameworkElement)Ui.Load("MainView.xaml");
             Content = view;
             Ui.Find<Image>(view, "Logo").Source = Ui.Image("logo.png");
-            Ui.Find<Button>(view, "LoginButton").Click += delegate { Ui.Guard(this, LoginOrLogout); };
-            Ui.Find<Button>(view, "CartButton").Click += delegate { Ui.Guard(this, ShowCart); };
-            Ui.Find<Button>(view, "OrdersButton").Click += delegate { Ui.Guard(this, ShowOrders); };
-            Ui.Find<Button>(view, "RefreshButton").Click += delegate { Ui.Guard(this, Reload); };
-            Ui.Find<TextBox>(view, "SearchBox").TextChanged += delegate { ApplyFilters(); };
-            Ui.Find<ComboBox>(view, "CategoryBox").SelectionChanged += delegate { ApplyFilters(); };
-            Ui.Find<ComboBox>(view, "SortBox").SelectionChanged += delegate { ApplyFilters(); };
+            Ui.Find<Button>(view, "LoginButton").Click += delegate
+            {
+                Ui.Guard(this, LoginOrLogout);
+            };
+            Ui.Find<Button>(view, "CartButton").Click += delegate
+            {
+                Ui.Guard(this, ShowCart);
+            };
+            Ui.Find<Button>(view, "OrdersButton").Click += delegate
+            {
+                Ui.Guard(this, ShowOrders);
+            };
+            Ui.Find<Button>(view, "RefreshButton").Click += delegate
+            {
+                Ui.Guard(this, Reload);
+            };
+            Ui.Find<TextBox>(view, "SearchBox").TextChanged += delegate
+            {
+                ApplyFilters();
+            };
+            Ui.Find<ComboBox>(view, "CategoryBox").SelectionChanged += delegate
+            {
+                ApplyFilters();
+            };
+            Ui.Find<ComboBox>(view, "SortBox").SelectionChanged += delegate
+            {
+                ApplyFilters();
+            };
             Ui.Find<ListBox>(view, "ProductsList").PreviewMouseLeftButtonUp += OpenSelectedProduct;
-            Ui.Find<ListBox>(view, "ProductsList").KeyDown += delegate(object sender, KeyEventArgs args)
+            Ui.Find<ListBox>(view, "ProductsList").KeyDown += delegate (object sender, KeyEventArgs args)
             {
                 if (args.Key == Key.Enter)
                 {
                     Ui.Guard(this, ShowProduct);
                 }
             };
-            Loaded += delegate { Ui.Guard(this, Reload); };
-            Closing += delegate(object sender, CancelEventArgs args)
+            Loaded += delegate
+            {
+                Ui.Guard(this, Reload);
+            };
+            Closing += delegate (object sender, CancelEventArgs args)
             {
                 if (cart.Count > 0 && !Ui.Confirm(this, "В корзине есть неоформленные позиции. Закрыть приложение и очистить корзину?"))
                 {
@@ -81,6 +111,7 @@ namespace ChudoObuv
             {
                 Ui.Find<ComboBox>(view, "CategoryBox").SelectedIndex = 0;
             }
+
             productView = CollectionViewSource.GetDefaultView(products);
             Ui.Find<ListBox>(view, "ProductsList").ItemsSource = productView;
             ready = true;
@@ -95,14 +126,14 @@ namespace ChudoObuv
             {
                 return;
             }
+
             string text = user == null ? "" : Ui.Find<TextBox>(view, "SearchBox").Text.Trim();
             object selected = Ui.Find<ComboBox>(view, "CategoryBox").SelectedValue;
             int categoryId = user == null || !(selected is int) ? 0 : (int)selected;
-            productView.Filter = delegate(object value)
+            productView.Filter = delegate (object value)
             {
                 var product = (Product)value;
-                bool matches = Ui.Russian.CompareInfo.IndexOf(product.Name, text, System.Globalization.CompareOptions.IgnoreCase) >= 0 ||
-                    Ui.Russian.CompareInfo.IndexOf(product.Description, text, System.Globalization.CompareOptions.IgnoreCase) >= 0;
+                bool matches = Ui.Russian.CompareInfo.IndexOf(product.Name, text, System.Globalization.CompareOptions.IgnoreCase) >= 0 || Ui.Russian.CompareInfo.IndexOf(product.Description, text, System.Globalization.CompareOptions.IgnoreCase) >= 0;
                 return (categoryId == 0 || product.CategoryId == categoryId) && matches;
             };
             productView.SortDescriptions.Clear();
@@ -111,6 +142,7 @@ namespace ChudoObuv
             {
                 productView.SortDescriptions.Add(new SortDescription("Price", sort == 1 ? ListSortDirection.Ascending : ListSortDirection.Descending));
             }
+
             productView.SortDescriptions.Add(new SortDescription("Id", ListSortDirection.Ascending));
             Ui.Find<TextBlock>(view, "CountText").Text = "Моделей: " + productView.Cast<Product>().Count() + " из " + products.Count;
             Ui.Find<TextBlock>(view, "EmptyText").Visibility = productView.IsEmpty ? Visibility.Visible : Visibility.Collapsed;
@@ -151,8 +183,10 @@ namespace ChudoObuv
                 {
                     SetUser(null);
                 }
+
                 return;
             }
+
             var content = (FrameworkElement)Ui.Load("LoginView.xaml");
             var dialog = Ui.Dialog(this, "вход по логину", content, 720, 520);
             var input = Ui.Find<TextBox>(content, "LoginBox");
@@ -164,10 +198,25 @@ namespace ChudoObuv
                     dialog.DialogResult = true;
                 });
             };
-            Ui.Find<Button>(content, "SignIn").Click += delegate { login(); };
-            Ui.Find<Button>(content, "Back").Click += delegate { dialog.Close(); };
-            input.KeyDown += delegate(object sender, KeyEventArgs args) { if (args.Key == Key.Enter) { login(); } };
-            dialog.Loaded += delegate { input.Focus(); };
+            Ui.Find<Button>(content, "SignIn").Click += delegate
+            {
+                login();
+            };
+            Ui.Find<Button>(content, "Back").Click += delegate
+            {
+                dialog.Close();
+            };
+            input.KeyDown += delegate (object sender, KeyEventArgs args)
+            {
+                if (args.Key == Key.Enter)
+                {
+                    login();
+                }
+            };
+            dialog.Loaded += delegate
+            {
+                input.Focus();
+            };
             dialog.ShowDialog();
         }
 
@@ -178,6 +227,7 @@ namespace ChudoObuv
             {
                 return;
             }
+
             Product product = store.GetProducts(DateTime.Today).Single(x => x.Id == selected.Id);
             var sizes = store.GetStock(product.Id);
             var content = (FrameworkElement)Ui.Load("ProductView.xaml");
@@ -191,7 +241,10 @@ namespace ChudoObuv
             Ui.NumericInput(quantity);
             Ui.Find<Button>(content, "Add").IsEnabled = user != null && selector.Items.Count > 0;
             Ui.Find<TextBlock>(content, "AddHint").Text = user == null ? "Войдите по логину, чтобы добавить товар в заказ." : "Выберите доступный размер и количество пар.";
-            Ui.Find<Button>(content, "Back").Click += delegate { dialog.Close(); };
+            Ui.Find<Button>(content, "Back").Click += delegate
+            {
+                dialog.Close();
+            };
             Ui.Find<Button>(content, "Add").Click += delegate
             {
                 Ui.Guard(dialog, delegate
@@ -201,6 +254,7 @@ namespace ChudoObuv
                     {
                         throw new InvalidOperationException("Выберите доступный размер.");
                     }
+
                     int count = Pricing.ParseQuantity(quantity.Text);
                     var current = store.GetStock(product.Id).Single(x => x.Id == size.Id);
                     var existing = cart.FirstOrDefault(x => x.StockId == size.Id);
@@ -208,6 +262,7 @@ namespace ChudoObuv
                     {
                         throw new InvalidOperationException("Недостаточно пар этого размера с учётом корзины. Доступно: " + current.Available + ". Уменьшите количество.");
                     }
+
                     if (existing == null)
                     {
                         cart.Add(new CartLine { StockId = size.Id, ProductId = product.Id, Name = product.Name, Manufacturer = product.Manufacturer, Size = size.Size, Quantity = count, UnitPrice = product.Price });
@@ -216,6 +271,7 @@ namespace ChudoObuv
                     {
                         existing.Quantity += count;
                     }
+
                     UpdateCartLabel();
                     dialog.DialogResult = true;
                 });
@@ -229,18 +285,23 @@ namespace ChudoObuv
             {
                 throw new InvalidOperationException("Войдите по логину для оформления заказа.");
             }
+
             var currentProducts = store.GetProducts(DateTime.Today).ToDictionary(x => x.Id);
             foreach (var line in cart)
             {
                 line.UnitPrice = currentProducts[line.ProductId].Price;
             }
+
             var content = (FrameworkElement)Ui.Load("CartView.xaml");
             var dialog = Ui.Dialog(this, "корзина и оформление заказа", content, 1060, 730);
             var grid = Ui.Find<DataGrid>(content, "CartGrid");
             var quantity = Ui.Find<TextBox>(content, "QuantityBox");
             Ui.NumericInput(quantity);
             var customers = Ui.Find<ComboBox>(content, "CustomerBox");
-            customers.ItemsSource = user.IsStaff ? store.GetUsers(user) : new List<User> { user };
+            customers.ItemsSource = user.IsStaff ? store.GetUsers(user) : new List<User>
+            {
+                user
+            };
             customers.SelectedValue = user.Id;
             customers.IsEnabled = user.IsStaff;
             Action refresh = delegate
@@ -260,10 +321,18 @@ namespace ChudoObuv
                 Ui.Guard(dialog, delegate
                 {
                     var line = grid.SelectedItem as CartLine;
-                    if (line == null) { throw new InvalidOperationException("Выберите строку корзины."); }
+                    if (line == null)
+                    {
+                        throw new InvalidOperationException("Выберите строку корзины.");
+                    }
+
                     int count = Pricing.ParseQuantity(quantity.Text);
                     var size = store.GetStock(line.ProductId).Single(x => x.Id == line.StockId);
-                    if (count > size.Available) { throw new InvalidOperationException("Доступно только " + size.Available + " пар. Уменьшите количество."); }
+                    if (count > size.Available)
+                    {
+                        throw new InvalidOperationException("Доступно только " + size.Available + " пар. Уменьшите количество.");
+                    }
+
                     line.Quantity = count;
                     refresh();
                 });
@@ -271,9 +340,16 @@ namespace ChudoObuv
             Ui.Find<Button>(content, "RemoveLine").Click += delegate
             {
                 var line = grid.SelectedItem as CartLine;
-                if (line != null) { cart.Remove(line); refresh(); }
+                if (line != null)
+                {
+                    cart.Remove(line);
+                    refresh();
+                }
             };
-            Ui.Find<Button>(content, "Back").Click += delegate { dialog.Close(); };
+            Ui.Find<Button>(content, "Back").Click += delegate
+            {
+                dialog.Close();
+            };
             Ui.Find<Button>(content, "CancelOrder").Click += delegate
             {
                 if (cart.Count == 0 || Ui.Confirm(dialog, "Отменить формирование заказа и очистить корзину?"))
@@ -288,8 +364,16 @@ namespace ChudoObuv
                 Ui.Guard(dialog, delegate
                 {
                     var customer = customers.SelectedItem as User;
-                    if (customer == null) { throw new InvalidOperationException("Выберите клиента."); }
-                    if (!Ui.Confirm(dialog, "Оформить заказ для «" + customer.FullName + "» на сумму " + cart.Sum(x => x.Total).ToString("N2", Ui.Russian) + " ₽?")) { return; }
+                    if (customer == null)
+                    {
+                        throw new InvalidOperationException("Выберите клиента.");
+                    }
+
+                    if (!Ui.Confirm(dialog, "Оформить заказ для «" + customer.FullName + "» на сумму " + cart.Sum(x => x.Total).ToString("N2", Ui.Russian) + " ₽?"))
+                    {
+                        return;
+                    }
+
                     int id = store.CreateOrder(user, customer.Id, cart, DateTime.Today);
                     cart.Clear();
                     refresh();
@@ -304,7 +388,11 @@ namespace ChudoObuv
 
         private void ShowOrders()
         {
-            if (user == null || !user.IsStaff) { throw new InvalidOperationException("Просмотр заказов доступен менеджеру и администратору."); }
+            if (user == null || !user.IsStaff)
+            {
+                throw new InvalidOperationException("Просмотр заказов доступен менеджеру и администратору.");
+            }
+
             var content = (FrameworkElement)Ui.Load("OrdersView.xaml");
             var dialog = Ui.Dialog(this, "управление заказами", content, 1130, 790);
             var ordersGrid = Ui.Find<DataGrid>(content, "OrdersGrid");
@@ -315,7 +403,7 @@ namespace ChudoObuv
             {
                 var order = ordersGrid.SelectedItem as Order;
                 linesGrid.ItemsSource = order == null ? new List<OrderLine>() : store.GetOrderLines(user, order.Id);
-                date.SelectedDate = order == null ? (DateTime?)null : order.Date;
+                date.SelectedDate = order == null ? (DateTime? )null : order.Date;
                 Ui.Find<TextBlock>(content, "OrderTotal").Text = order == null ? "Выберите заказ" : "Заказ № " + order.Id + " · Итого: " + order.Total.ToString("N2", Ui.Russian) + " ₽";
             };
             Action refresh = delegate
@@ -327,9 +415,18 @@ namespace ChudoObuv
                 loadLines();
                 Reload();
             };
-            ordersGrid.SelectionChanged += delegate { Ui.Guard(dialog, loadLines); };
-            Ui.Find<Button>(content, "Back").Click += delegate { dialog.Close(); };
-            Ui.Find<Button>(content, "Refresh").Click += delegate { Ui.Guard(dialog, refresh); };
+            ordersGrid.SelectionChanged += delegate
+            {
+                Ui.Guard(dialog, loadLines);
+            };
+            Ui.Find<Button>(content, "Back").Click += delegate
+            {
+                dialog.Close();
+            };
+            Ui.Find<Button>(content, "Refresh").Click += delegate
+            {
+                Ui.Guard(dialog, refresh);
+            };
             Ui.Find<Button>(content, "NewOrder").Click += delegate
             {
                 dialog.Close();
@@ -341,7 +438,11 @@ namespace ChudoObuv
                 Ui.Guard(dialog, delegate
                 {
                     var order = ordersGrid.SelectedItem as Order;
-                    if (order == null) { throw new InvalidOperationException("Выберите заказ."); }
+                    if (order == null)
+                    {
+                        throw new InvalidOperationException("Выберите заказ.");
+                    }
+
                     if (Ui.Confirm(dialog, "Удалить заказ № " + order.Id + "? Все его позиции будут удалены, количество вернётся в остатки."))
                     {
                         store.DeleteOrder(user, order.Id);
@@ -354,7 +455,11 @@ namespace ChudoObuv
                 Ui.Guard(dialog, delegate
                 {
                     var order = ordersGrid.SelectedItem as Order;
-                    if (order == null || !date.SelectedDate.HasValue) { throw new InvalidOperationException("Выберите заказ и корректную дату."); }
+                    if (order == null || !date.SelectedDate.HasValue)
+                    {
+                        throw new InvalidOperationException("Выберите заказ и корректную дату.");
+                    }
+
                     store.ChangeOrderDate(user, order.Id, date.SelectedDate.Value);
                     refresh();
                 });
@@ -365,7 +470,11 @@ namespace ChudoObuv
                 {
                     var order = ordersGrid.SelectedItem as Order;
                     var line = linesGrid.SelectedItem as OrderLine;
-                    if (order == null || line == null) { throw new InvalidOperationException("Выберите позицию в составе заказа."); }
+                    if (order == null || line == null)
+                    {
+                        throw new InvalidOperationException("Выберите позицию в составе заказа.");
+                    }
+
                     if (Ui.Confirm(dialog, "Удалить выбранную позицию? Количество вернётся в остатки, сумма заказа уменьшится."))
                     {
                         store.DeleteOrderLine(user, order.Id, line.Id);

@@ -14,7 +14,13 @@ namespace ChudoObuv
     public static class Ui
     {
         public static readonly CultureInfo Russian = CultureInfo.GetCultureInfo("ru-RU");
-        public static string BaseDirectory { get { return AppDomain.CurrentDomain.BaseDirectory; } }
+        public static string BaseDirectory
+        {
+            get
+            {
+                return AppDomain.CurrentDomain.BaseDirectory;
+            }
+        }
 
         public static object Load(string name)
         {
@@ -24,6 +30,7 @@ namespace ChudoObuv
                 {
                     throw new InvalidOperationException("Не найден встроенный интерфейс " + name);
                 }
+
                 return XamlReader.Load(stream);
             }
         }
@@ -42,6 +49,7 @@ namespace ChudoObuv
             {
                 path = Path.Combine(assets, "picture.png");
             }
+
             try
             {
                 var bitmap = new BitmapImage();
@@ -58,20 +66,34 @@ namespace ChudoObuv
                 {
                     return Image(null);
                 }
+
                 return null;
             }
         }
 
-        public static T Find<T>(FrameworkElement root, string name) where T : class
+        public static T Find<T>(FrameworkElement root, string name)
+            where T : class
         {
             return (T)root.FindName(name);
         }
 
         public static Window Dialog(Window owner, string title, FrameworkElement content, double width, double height)
         {
-            return new Window { Title = "Чудо Обувь — " + title, Owner = owner, Content = content, Width = width, Height = height,
-                MinWidth = Math.Min(width, 720), MinHeight = Math.Min(height, 520), WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Icon = Image("app.ico"), FontFamily = new System.Windows.Media.FontFamily("Calibri"), FontSize = 15, Background = System.Windows.Media.Brushes.White };
+            return new Window
+            {
+                Title = "Чудо Обувь — " + title,
+                Owner = owner,
+                Content = content,
+                Width = width,
+                Height = height,
+                MinWidth = Math.Min(width, 720),
+                MinHeight = Math.Min(height, 520),
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Icon = Image("app.ico"),
+                FontFamily = new System.Windows.Media.FontFamily("Calibri"),
+                FontSize = 15,
+                Background = System.Windows.Media.Brushes.White
+            };
         }
 
         public static void Guard(Window owner, Action action)
@@ -92,10 +114,9 @@ namespace ChudoObuv
             if (error is System.Data.SqlClient.SqlException)
             {
                 var sql = (System.Data.SqlClient.SqlException)error;
-                message = sql.Number == 1205 ? "Другой пользователь изменяет эти данные. Повторите действие. Изменения не сохранены."
-                    : "Не удалось выполнить операцию MSSQL. Проверьте доступность сервера и строку подключения в ChudoObuv.exe.config. " +
-                      "При первом запуске выполните Initialize-Database.ps1 по инструкции START.md.\n\nПодробности: " + error.Message;
+                message = sql.Number == 1205 ? "Другой пользователь изменяет эти данные. Повторите действие. Изменения не сохранены." : "Не удалось выполнить операцию MSSQL. Проверьте доступность сервера и строку подключения в ChudoObuv.exe.config. " + "При первом запуске выполните Initialize-Database.ps1 по инструкции START.md.\n\nПодробности: " + error.Message;
             }
+
             MessageBox.Show(owner, message, "Чудо Обувь — ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
         }
 
@@ -106,8 +127,11 @@ namespace ChudoObuv
 
         public static void NumericInput(TextBox box)
         {
-            box.PreviewTextInput += delegate(object sender, TextCompositionEventArgs args) { args.Handled = !Regex.IsMatch(args.Text, "^[0-9]+$"); };
-            DataObject.AddPastingHandler(box, delegate(object sender, DataObjectPastingEventArgs args)
+            box.PreviewTextInput += delegate (object sender, TextCompositionEventArgs args)
+            {
+                args.Handled = !Regex.IsMatch(args.Text, "^[0-9]+$");
+            };
+            DataObject.AddPastingHandler(box, delegate (object sender, DataObjectPastingEventArgs args)
             {
                 if (!args.SourceDataObject.GetDataPresent(DataFormats.Text) || !Regex.IsMatch((string)args.SourceDataObject.GetData(DataFormats.Text), "^[0-9]+$"))
                 {
