@@ -1,1 +1,4 @@
-
+﻿role_id;code;name
+1;admin;Администратор
+2;manager;Менеджер
+3;customer;Авторизованный пользователь
