@@ -1,0 +1,13 @@
+src/**/bin/
+src/**/obj/
+.vs/
+*.user
+tests/*.exe
+tests/*.exe.config
+/ChudoObuv.Tests.exe
+/ChudoObuv.Tests.exe.config
+/ChudoObuv_updated.exe
+/ChudoObuv_updated.exe.config
+*.inspect.ndjson
+*.mdf
+*.ldf
